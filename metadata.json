@@ -1,0 +1,8 @@
+{
+  "name": "PharmaGuard AI",
+  "description": "Autonomous Clinical Safety Intelligence System with Causal AI, Digital Patient Twin, Knowledge Graph RAG, Temporal Simulation, and Multi-Agent Reasoning.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
