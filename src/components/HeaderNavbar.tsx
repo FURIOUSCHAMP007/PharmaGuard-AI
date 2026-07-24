@@ -18,6 +18,7 @@ import {
   Compass
 } from 'lucide-react';
 import { UserRole, Patient } from '../types/pharmaguard';
+import { PatientAvatar } from './PatientAvatar';
 
 interface HeaderNavbarProps {
   selectedRole?: string;
@@ -284,15 +285,21 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
           </div>
         </div>
 
-        {/* Patient Selector */}
+        {/* Dynamic Patient Avatar & Selector */}
         {effectivePatients.length > 0 && effectiveSelectedPatient && (
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800">
-            <User className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-            <span className="text-slate-400 font-medium hidden md:inline">Patient:</span>
+          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-lg pl-2 pr-3 py-1 text-xs text-slate-800">
+            {/* Dynamic Patient Avatar with Risk Glow & Hover Popover */}
+            <PatientAvatar 
+              patient={effectiveSelectedPatient} 
+              size="sm" 
+              onNavigate={onNavigate}
+            />
+
+            <span className="text-slate-400 font-medium hidden lg:inline">Patient:</span>
             <select
               value={effectiveSelectedPatient.id}
               onChange={(e) => handlePatientChange(e.target.value)}
-              className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer max-w-[160px] md:max-w-[200px] truncate"
+              className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer max-w-[140px] md:max-w-[180px] truncate"
             >
               {effectivePatients.map(p => (
                 <option key={p.id} value={p.id} className="bg-white text-slate-900">
