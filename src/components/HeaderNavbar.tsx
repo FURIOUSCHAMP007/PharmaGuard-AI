@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { UserRole, Patient } from '../types/pharmaguard';
 import { PatientAvatar } from './PatientAvatar';
+import { NotificationCenter } from './NotificationCenter';
 
 interface HeaderNavbarProps {
   selectedRole?: string;
@@ -57,6 +58,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
   const [showVoiceGuide, setShowVoiceGuide] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   const roles: string[] = [
@@ -330,8 +332,11 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
 
         {/* Notifications Bell */}
         <button
-          onClick={onOpenAlerts}
-          className="relative p-2 text-slate-500 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200"
+          onClick={() => {
+            if (onOpenAlerts) onOpenAlerts();
+            setIsNotificationOpen(prev => !prev);
+          }}
+          className="relative p-2 text-slate-500 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200 cursor-pointer"
           title="Notifications & Safety Alerts"
         >
           <Bell className="w-4 h-4 text-slate-600" />
@@ -340,6 +345,15 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
           )}
         </button>
       </div>
+
+      {/* Notification Center Slide-Over Drawer */}
+      <NotificationCenter
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        activePatient={effectiveSelectedPatient}
+        onNavigate={onNavigate}
+        onSelectPatientId={onSelectPatientId}
+      />
 
       {/* Voice Feedback Toast Overlay */}
       {voiceFeedback && (

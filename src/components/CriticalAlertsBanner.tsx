@@ -193,7 +193,7 @@ export const CriticalAlertsBanner: React.FC<CriticalAlertsBannerProps> = ({
               </button>
 
               <button
-                onClick={() => onNavigate('alternatives')}
+                onClick={() => onNavigate('alt_recommend')}
                 className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Optimize Regimen</span>
@@ -201,7 +201,7 @@ export const CriticalAlertsBanner: React.FC<CriticalAlertsBannerProps> = ({
               </button>
 
               <button
-                onClick={() => onNavigate('drug_matrix')}
+                onClick={() => onNavigate('interaction_matrix')}
                 className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Interaction Matrix</span>

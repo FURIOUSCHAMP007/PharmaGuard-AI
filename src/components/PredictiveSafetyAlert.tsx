@@ -398,7 +398,7 @@ export const PredictiveSafetyAlert: React.FC<PredictiveSafetyAlertProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => onNavigate('temporal_risk')}
+                onClick={() => onNavigate('temporal_simulation')}
                 className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Full Temporal PK/PD Simulator</span>

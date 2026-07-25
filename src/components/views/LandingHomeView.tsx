@@ -164,7 +164,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({ onNavigate, se
           </button>
 
           <button 
-            onClick={() => onNavigate('reports_export')}
+            onClick={() => onNavigate('reports_pdf')}
             className="p-4 rounded-xl bg-slate-800/80 border border-slate-700/70 hover:border-indigo-500 text-left transition-all group cursor-pointer"
           >
             <div className="text-xs text-slate-400 font-semibold mb-1">Step 3: Clinical Safety Report</div>

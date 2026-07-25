@@ -1,1 +1,103 @@
 @import "tailwindcss";
+
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 1.5cm;
+  }
+
+  /* Reset layout constraints and hide UI chrome */
+  body, html {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide navigation, sidebars, interactive controls, and dark-mode overlays */
+  nav,
+  aside,
+  header,
+  footer,
+  button,
+  .no-print,
+  [role="navigation"],
+  .sidebar,
+  .notification-center {
+    display: none !important;
+  }
+
+  /* Expand main container to full printable area */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  /* Ensure cards, sections and containers maintain high contrast for print */
+  .prose,
+  .clinical-report,
+  article,
+  section {
+    color: #0f172a !important;
+    background: transparent !important;
+  }
+
+  /* Table styling & prevent breaking rows across pages */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 1rem !important;
+  }
+
+  tr, td, th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tbody {
+    display: table-row-group !important;
+  }
+
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6pt 10pt !important;
+    color: #0f172a !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Keep headers with their content */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    color: #0284c7 !important;
+  }
+
+  /* Avoid orphan blocks */
+  .card, .panel, .clinical-card, blockquote {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    padding: 12pt !important;
+    margin-bottom: 12pt !important;
+  }
+}

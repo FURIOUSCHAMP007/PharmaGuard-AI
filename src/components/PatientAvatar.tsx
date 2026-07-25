@@ -40,14 +40,14 @@ export const PatientAvatar: React.FC<PatientAvatarProps> = ({
     'pat-004': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200&h=200', // Male Adult
   };
 
-  const avatarSrc = patient.avatarUrl || defaultAvatars[patient.id] || (
+  const avatarSrc = (patient as any).avatarUrl || defaultAvatars[patient.id] || (
     patient.gender === 'Female'
       ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200'
       : 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200&h=200'
   );
 
   // Extract initials (e.g., "Eleanor Vance" -> "EV")
-  const initials = patient.name
+  const initials = (patient?.name || 'Patient')
     .split(' ')
     .map(n => n[0])
     .filter(Boolean)

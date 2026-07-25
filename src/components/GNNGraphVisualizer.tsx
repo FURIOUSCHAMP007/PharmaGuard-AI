@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Share2, Sparkles, Filter, Layers, Zap, Eye, Cpu, Activity, Circle, ShieldAlert, ArrowRight, RefreshCw, BarChart2, CheckCircle2 } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Share2, Sparkles, Filter, Layers, Zap, Eye, Cpu, Activity, Circle, ShieldAlert, ArrowRight, RefreshCw, BarChart2, CheckCircle2, ZoomIn, ZoomOut, Maximize2, Move, RotateCcw } from 'lucide-react';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, BarChart, Bar, CartesianGrid, Cell, AreaChart, Area } from 'recharts';
 
 export type GNNNodeType = 'Drug' | 'Target' | 'Enzyme' | 'Pathway' | 'SideEffect';
@@ -34,13 +34,17 @@ interface GNNGraphVisualizerProps {
   initialEdges?: GNNEdgeData[];
   patientName?: string;
   compactMode?: boolean;
+  onNodeSelect?: (nodeId: string) => void;
 }
 
 export const GNNGraphVisualizer: React.FC<GNNGraphVisualizerProps> = ({
   title = "Graph Neural Network (GNN) Message-Passing & Attention Architecture",
   subtitle = "Real-time GAT (Graph Attention Network) node-level aggregation, 512-dim embedding projections, and multi-head edge attributions",
   patientName = "Selected Patient",
-  compactMode = false
+  compactMode = false,
+  initialNodes,
+  initialEdges,
+  onNodeSelect
 }) => {
   const [selectedModel, setSelectedModel] = useState<'GAT' | 'GCN' | 'RGCN'>('GAT');
   const [activeLayer, setActiveLayer] = useState<number>(2); // Layer 0, 1, 2
@@ -49,6 +53,139 @@ export const GNNGraphVisualizer: React.FC<GNNGraphVisualizerProps> = ({
   const [selectedNodeId, setSelectedNodeId] = useState<string>('d1');
   const [minAttentionThreshold, setMinAttentionThreshold] = useState<number>(0.15);
   const [activeTab, setActiveTab] = useState<'graph' | 'tsne' | 'attention' | 'convergence'>('graph');
+
+  // Movable / Pannable / Zoomable Graph State
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [zoom, setZoom] = useState<number>(1.0);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const [isPanningCanvas, setIsPanningCanvas] = useState<boolean>(false);
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+
+  const dragStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    initialPan: { x: number; y: number };
+    initialNodePos?: { x: number; y: number };
+  }>({
+    mouseX: 0,
+    mouseY: 0,
+    initialPan: { x: 0, y: 0 }
+  });
+
+  const svgContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const getNodePos = (node: GNNNodeData) => {
+    return nodePositions[node.id] || { x: node.x, y: node.y };
+  };
+
+  const handleResetNodePositions = () => {
+    setNodePositions({});
+  };
+
+  const handleResetView = () => {
+    setPan({ x: 0, y: 0 });
+    setZoom(1.0);
+  };
+
+  const handleZoomIn = () => {
+    setZoom(prev => Math.min(2.5, +(prev + 0.15).toFixed(2)));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(prev => Math.max(0.5, +(prev - 0.15).toFixed(2)));
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+    setZoom(prev => {
+      const next = prev * zoomFactor;
+      return Math.min(2.5, Math.max(0.5, +next.toFixed(2)));
+    });
+  };
+
+  const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'INPUT') return;
+
+    setIsPanningCanvas(true);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      initialPan: { ...pan }
+    };
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (err) {
+      // safe fallback
+    }
+  };
+
+  const handleNodePointerDown = (e: React.PointerEvent<SVGGElement>, nodeId: string) => {
+    e.stopPropagation();
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    const currentPos = getNodePos(node);
+    setDraggedNodeId(nodeId);
+    setSelectedNodeId(nodeId);
+    onNodeSelect?.(nodeId);
+
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      initialPan: { ...pan },
+      initialNodePos: { ...currentPos }
+    };
+
+    try {
+      (e.currentTarget as unknown as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (err) {
+      // safe fallback
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const dx = e.clientX - dragStartRef.current.mouseX;
+    const dy = e.clientY - dragStartRef.current.mouseY;
+
+    if (draggedNodeId) {
+      const rect = svgContainerRef.current?.getBoundingClientRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+
+      const initialPos = dragStartRef.current.initialNodePos;
+      if (!initialPos) return;
+
+      const deltaXPercent = (dx / (rect.width * zoom)) * 100;
+      const deltaYPercent = (dy / (rect.height * zoom)) * 100;
+
+      const newX = Math.min(95, Math.max(5, +(initialPos.x + deltaXPercent).toFixed(1)));
+      const newY = Math.min(95, Math.max(5, +(initialPos.y + deltaYPercent).toFixed(1)));
+
+      setNodePositions(prev => ({
+        ...prev,
+        [draggedNodeId]: { x: newX, y: newY }
+      }));
+    } else if (isPanningCanvas) {
+      const initialPan = dragStartRef.current.initialPan;
+      setPan({
+        x: initialPan.x + dx,
+        y: initialPan.y + dy
+      });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsPanningCanvas(false);
+    setDraggedNodeId(null);
+    try {
+      if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {
+      // safe fallback
+    }
+  };
 
   // Default rich biomedical GNN node set
   const defaultNodes: GNNNodeData[] = useMemo(() => [
@@ -78,8 +215,8 @@ export const GNNGraphVisualizer: React.FC<GNNGraphVisualizerProps> = ({
     { id: 'e_e2_pw1', source: 'e2', target: 'pw1', relation: 'MODULATES_SIGNAL', attentionWeight: 0.54, headScores: [0.52, 0.56, 0.53, 0.55] }
   ], []);
 
-  const nodes = defaultNodes;
-  const edges = defaultEdges;
+  const nodes = useMemo(() => (initialNodes && initialNodes.length > 0 ? initialNodes : defaultNodes), [initialNodes, defaultNodes]);
+  const edges = useMemo(() => (initialEdges && initialEdges.length > 0 ? initialEdges : defaultEdges), [initialEdges, defaultEdges]);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || nodes[0], [nodes, selectedNodeId]);
 
@@ -310,114 +447,191 @@ export const GNNGraphVisualizer: React.FC<GNNGraphVisualizerProps> = ({
             </div>
 
             {/* SVG Visual Canvas */}
-            <div className="relative w-full h-[360px] my-2">
+            <div 
+              ref={svgContainerRef}
+              className={`relative w-full h-[380px] my-2 overflow-hidden rounded-xl bg-slate-950/90 border border-slate-800/80 touch-none select-none ${
+                isPanningCanvas ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
+              onWheel={handleWheel}
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+            >
+              {/* Zoom & Pan Overlay Toolbar */}
+              <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur border border-slate-700/80 p-1.5 rounded-xl shadow-lg">
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  title="Zoom In"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] font-mono font-bold text-cyan-300 px-1 min-w-[36px] text-center">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  title="Zoom Out"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <div className="w-px h-4 bg-slate-700/80 my-auto mx-0.5"></div>
+                <button
+                  type="button"
+                  onClick={handleResetView}
+                  title="Recenter Canvas View"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors flex items-center gap-1 cursor-pointer text-[10px] font-bold px-2"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Center</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetNodePositions}
+                  title="Reset Node Locations to Default"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors flex items-center gap-1 cursor-pointer text-[10px] font-bold px-2"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Nodes</span>
+                </button>
+              </div>
+
+              {/* Pan/Drag Status Hint */}
+              <div className="absolute top-3 left-3 z-30 pointer-events-none hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-800 text-[10px] font-mono text-slate-300">
+                <Move className="w-3 h-3 text-cyan-400 animate-pulse" />
+                <span>Drag canvas to scroll • Drag nodes to move • Scroll wheel to zoom</span>
+              </div>
+
               <svg className="w-full h-full overflow-visible">
-                {/* Render Edges */}
-                {filteredEdges.map((edge) => {
-                  const sourceNode = nodes.find((n) => n.id === edge.source);
-                  const targetNode = nodes.find((n) => n.id === edge.target);
+                <g 
+                  transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}
+                  style={{ transformOrigin: 'center center' }}
+                >
+                  {/* Render Edges */}
+                  {filteredEdges.map((edge) => {
+                    const sourceNode = nodes.find((n) => n.id === edge.source);
+                    const targetNode = nodes.find((n) => n.id === edge.target);
 
-                  if (!sourceNode || !targetNode) return null;
+                    if (!sourceNode || !targetNode) return null;
 
-                  const isConnectedToSelected =
-                    edge.source === selectedNode.id || edge.target === selectedNode.id;
-                  const isHovered =
-                    edge.source === hoveredNodeId || edge.target === hoveredNodeId;
+                    const sourcePos = getNodePos(sourceNode);
+                    const targetPos = getNodePos(targetNode);
 
-                  const strokeWidth = Math.max(1.5, edge.attentionWeight * 4.5);
-                  const opacity = isConnectedToSelected ? 1.0 : isHovered ? 0.9 : 0.45;
+                    const isConnectedToSelected =
+                      edge.source === selectedNode.id || edge.target === selectedNode.id;
+                    const isHovered =
+                      edge.source === hoveredNodeId || edge.target === hoveredNodeId;
 
-                  const color = edge.attentionWeight > 0.9 ? '#f43f5e' : edge.attentionWeight > 0.75 ? '#f59e0b' : '#38bdf8';
+                    const strokeWidth = Math.max(1.5, edge.attentionWeight * 4.5);
+                    const opacity = isConnectedToSelected ? 1.0 : isHovered ? 0.9 : 0.45;
 
-                  return (
-                    <g key={edge.id}>
-                      <line
-                        x1={`${sourceNode.x}%`}
-                        y1={`${sourceNode.y}%`}
-                        x2={`${targetNode.x}%`}
-                        y2={`${targetNode.y}%`}
-                        stroke={color}
-                        strokeWidth={strokeWidth}
-                        strokeOpacity={opacity}
-                        strokeDasharray={selectedModel === 'GAT' ? 'none' : '4 4'}
-                      />
-                      {/* Edge Attention Label */}
-                      <text
-                        x={`${(sourceNode.x + targetNode.x) / 2}%`}
-                        y={`${(sourceNode.y + targetNode.y) / 2}%`}
-                        fill="#cbd5e1"
-                        fontSize="9"
-                        fontFamily="monospace"
-                        fontWeight="bold"
-                        textAnchor="middle"
-                        className="pointer-events-none drop-shadow-md"
-                      >
-                        &alpha;={edge.attentionWeight.toFixed(2)}
-                      </text>
-                    </g>
-                  );
-                })}
+                    const color = edge.attentionWeight > 0.9 ? '#f43f5e' : edge.attentionWeight > 0.75 ? '#f59e0b' : '#38bdf8';
 
-                {/* Render Nodes */}
-                {filteredNodes.map((node) => {
-                  const isSelected = node.id === selectedNode.id;
-                  const isHovered = node.id === hoveredNodeId;
-                  const nodeColor = getNodeColor(node.type);
-
-                  return (
-                    <g
-                      key={node.id}
-                      className="cursor-pointer transition-transform duration-200"
-                      onClick={() => setSelectedNodeId(node.id)}
-                      onMouseEnter={() => setHoveredNodeId(node.id)}
-                      onMouseLeave={() => setHoveredNodeId(null)}
-                    >
-                      {/* Halo Pulse for Selected Node */}
-                      {isSelected && (
-                        <circle
-                          cx={`${node.x}%`}
-                          cy={`${node.y}%`}
-                          r="28"
-                          fill={nodeColor}
-                          fillOpacity="0.25"
-                          className="animate-ping"
+                    return (
+                      <g key={edge.id}>
+                        <line
+                          x1={`${sourcePos.x}%`}
+                          y1={`${sourcePos.y}%`}
+                          x2={`${targetPos.x}%`}
+                          y2={`${targetPos.y}%`}
+                          stroke={color}
+                          strokeWidth={strokeWidth}
+                          strokeOpacity={opacity}
+                          strokeDasharray={selectedModel === 'GAT' ? 'none' : '4 4'}
                         />
-                      )}
+                        {/* Edge Attention Label */}
+                        <text
+                          x={`${(sourcePos.x + targetPos.x) / 2}%`}
+                          y={`${(sourcePos.y + targetPos.y) / 2}%`}
+                          fill="#f1f5f9"
+                          stroke="#0f172a"
+                          strokeWidth="3"
+                          strokeLinejoin="round"
+                          style={{ paintOrder: 'stroke fill' }}
+                          fontSize="10"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                          textAnchor="middle"
+                          className="pointer-events-none select-none"
+                        >
+                          &alpha;={edge.attentionWeight.toFixed(2)}
+                        </text>
+                      </g>
+                    );
+                  })}
 
-                      {/* Main Node Circle */}
-                      <circle
-                        cx={`${node.x}%`}
-                        cy={`${node.y}%`}
-                        r={isSelected ? 18 : isHovered ? 16 : 14}
-                        fill="#0f172a"
-                        stroke={nodeColor}
-                        strokeWidth={isSelected ? 3.5 : 2}
-                        className="transition-all"
-                      />
+                  {/* Render Nodes */}
+                  {filteredNodes.map((node) => {
+                    const isSelected = node.id === selectedNode.id;
+                    const isHovered = node.id === hoveredNodeId;
+                    const isBeingDragged = node.id === draggedNodeId;
+                    const nodeColor = getNodeColor(node.type);
+                    const pos = getNodePos(node);
 
-                      {/* Inner Core Indicator */}
-                      <circle
-                        cx={`${node.x}%`}
-                        cy={`${node.y}%`}
-                        r={isSelected ? 6 : 4}
-                        fill={nodeColor}
-                      />
-
-                      {/* Label Text */}
-                      <text
-                        x={`${node.x}%`}
-                        y={`${node.y + 7}%`}
-                        fill="#f8fafc"
-                        fontSize="11"
-                        fontWeight="bold"
-                        textAnchor="middle"
-                        className="pointer-events-none drop-shadow-lg"
+                    return (
+                      <g
+                        key={node.id}
+                        className="cursor-move transition-transform duration-75"
+                        onPointerDown={(e) => handleNodePointerDown(e, node.id)}
+                        onClick={() => setSelectedNodeId(node.id)}
+                        onMouseEnter={() => setHoveredNodeId(node.id)}
+                        onMouseLeave={() => setHoveredNodeId(null)}
                       >
-                        {node.label}
-                      </text>
-                    </g>
-                  );
-                })}
+                        {/* Halo Pulse for Selected or Dragged Node */}
+                        {(isSelected || isBeingDragged) && (
+                          <circle
+                            cx={`${pos.x}%`}
+                            cy={`${pos.y}%`}
+                            r="28"
+                            fill={nodeColor}
+                            fillOpacity={isBeingDragged ? "0.4" : "0.25"}
+                            className={isBeingDragged ? "animate-pulse" : "animate-ping"}
+                          />
+                        )}
+
+                        {/* Main Node Circle */}
+                        <circle
+                          cx={`${pos.x}%`}
+                          cy={`${pos.y}%`}
+                          r={isSelected || isBeingDragged ? 18 : isHovered ? 16 : 14}
+                          fill="#0f172a"
+                          stroke={nodeColor}
+                          strokeWidth={isSelected || isBeingDragged ? 3.5 : 2}
+                          className="transition-all"
+                        />
+
+                        {/* Inner Core Indicator */}
+                        <circle
+                          cx={`${pos.x}%`}
+                          cy={`${pos.y}%`}
+                          r={isSelected || isBeingDragged ? 6 : 4}
+                          fill={nodeColor}
+                        />
+
+                        {/* Label Text */}
+                        <text
+                          x={`${pos.x}%`}
+                          y={`${pos.y + 7.5}%`}
+                          fill="#ffffff"
+                          stroke="#020617"
+                          strokeWidth="4"
+                          strokeLinejoin="round"
+                          style={{ paintOrder: 'stroke fill' }}
+                          fontSize="12"
+                          fontWeight="800"
+                          textAnchor="middle"
+                          className="pointer-events-none select-none tracking-tight"
+                        >
+                          {node.label}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
               </svg>
             </div>
 

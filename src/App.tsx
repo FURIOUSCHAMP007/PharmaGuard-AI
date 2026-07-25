@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HeaderNavbar } from './components/HeaderNavbar';
 import { Sidebar } from './components/Sidebar';
+import { Activity, Sparkles, ShieldCheck, Dna, Database } from 'lucide-react';
 
 // Import Views
 import { LandingHomeView } from './components/views/LandingHomeView';
@@ -42,12 +43,30 @@ import {
 import { Patient, CausalIntervention, DoctorReview, UserRole } from './types/pharmaguard';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('landing');
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [initProgress, setInitProgress] = useState<number>(15);
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedRole, setSelectedRole] = useState<string>('Cardiologist / Physician');
   const [patientsList, setPatientsList] = useState<Patient[]>(INITIAL_PATIENTS);
   const [selectedPatientId, setSelectedPatientId] = useState<string>(INITIAL_PATIENTS[0].id);
   const [interventionsList, setInterventionsList] = useState<CausalIntervention[]>(MOCK_CAUSAL_INTERVENTIONS);
   const [doctorReviewsList, setDoctorReviewsList] = useState<DoctorReview[]>(MOCK_DOCTOR_REVIEWS);
+
+  // Simulate initial model & patient graph hydration
+  useEffect(() => {
+    const timer1 = setTimeout(() => setInitProgress(55), 200);
+    const timer2 = setTimeout(() => setInitProgress(90), 450);
+    const timer3 = setTimeout(() => {
+      setInitProgress(100);
+      setIsInitializing(false);
+    }, 650);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, []);
 
   const selectedPatient = patientsList.find(p => p.id === selectedPatientId) || patientsList[0] || INITIAL_PATIENTS[0];
 
@@ -85,6 +104,65 @@ export default function App() {
     setDoctorReviewsList(prev => [newReview, ...prev]);
   };
 
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
+          {/* Logo Icon Spinner */}
+          <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-3xl bg-indigo-500/20 animate-ping"></div>
+            <div className="relative z-10 w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <ShieldCheck className="w-9 h-9 text-white animate-pulse" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
+              <span>PharmaGuard AI Engine</span>
+              <Sparkles className="w-4 h-4 text-cyan-400" />
+            </h1>
+            <p className="text-xs text-slate-400">
+              Initializing Digital Patient Twins, Pharmacogenomic Knowledge Graph & Multi-Agent Network...
+            </p>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
+              <div 
+                className="bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 h-full rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${initProgress}%` }}
+              ></div>
+            </div>
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                <span>Hydrating Data Models</span>
+              </span>
+              <span className="font-bold text-cyan-300">{initProgress}%</span>
+            </div>
+          </div>
+
+          {/* Skeleton Placeholders Grid */}
+          <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-slate-800/80">
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 space-y-1.5 animate-pulse">
+              <div className="w-5 h-5 rounded bg-indigo-500/30 mx-auto"></div>
+              <div className="h-2 w-12 bg-slate-800 rounded mx-auto"></div>
+            </div>
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 space-y-1.5 animate-pulse">
+              <div className="w-5 h-5 rounded bg-cyan-500/30 mx-auto"></div>
+              <div className="h-2 w-12 bg-slate-800 rounded mx-auto"></div>
+            </div>
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 space-y-1.5 animate-pulse">
+              <div className="w-5 h-5 rounded bg-emerald-500/30 mx-auto"></div>
+              <div className="h-2 w-12 bg-slate-800 rounded mx-auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* Top Header Navigation Bar */}
@@ -102,6 +180,7 @@ export default function App() {
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 text-slate-900 scrollbar-thin">
+          <div className="max-w-[1800px] mx-auto w-full space-y-6">
           {activeTab === 'landing' && (
             <LandingHomeView selectedPatient={selectedPatient} onNavigate={(tab) => setActiveTab(tab)} />
           )}
@@ -234,6 +313,7 @@ export default function App() {
           {activeTab === 'admin_monitoring' && (
             <AdminMonitoringView metrics={MOCK_SYSTEM_METRICS} />
           )}
+          </div>
         </main>
       </div>
     </div>

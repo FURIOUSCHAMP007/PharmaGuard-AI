@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { MessageSquareCode, Send, Bot, User, Sparkles, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageSquareCode, Send, Bot, User, Sparkles, RefreshCw, Mic, MicOff, Volume2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Patient } from '../../types/pharmaguard';
 import { INITIAL_PATIENTS } from '../../data/mockClinicalData';
+import { FormattedClinicalAnalysis } from '../FormattedClinicalAnalysis';
 
 interface GeminiChatAssistantViewProps {
   patient?: Patient;
@@ -27,6 +28,106 @@ export const GeminiChatAssistantView: React.FC<GeminiChatAssistantViewProps> = (
 
   const [inputPrompt, setInputPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [interimTranscript, setInterimTranscript] = useState('');
+
+  const recognitionRef = useRef<any>(null);
+
+  // Initialize Web Speech Recognition API if available
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let currentInterim = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            currentInterim += event.results[i][0].transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          setInputPrompt(prev => (prev ? `${prev} ${finalTranscript.trim()}` : finalTranscript.trim()));
+          setInterimTranscript('');
+        } else {
+          setInterimTranscript(currentInterim);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          setSpeechError('Microphone permission denied. Please allow microphone access in browser settings.');
+        } else {
+          setSpeechError(`Voice input error: ${event.error}`);
+        }
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        setInterimTranscript('');
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
+  const toggleRecording = () => {
+    setSpeechError(null);
+    if (isRecording) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      setIsRecording(false);
+    } else {
+      if (!recognitionRef.current) {
+        // Fallback simulation if SpeechRecognition is not natively available in browser environment
+        setIsRecording(true);
+        setSpeechError(null);
+        
+        // Simulate clinician dictation sample after 2.5s
+        setTimeout(() => {
+          const sampleDictation = `Patient ${activePatient.name} reported mild dizziness following morning dose of Amiodarone. eGFR remains ${activePatient.kidneyFunction.egfr} mL/min. Recommend evaluating QTc interval and adjusting Warfarin dose.`;
+          setInputPrompt(prev => (prev ? `${prev} ${sampleDictation}` : sampleDictation));
+          setIsRecording(false);
+        }, 2500);
+        return;
+      }
+
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (err: any) {
+        console.error('Failed to start speech recognition:', err);
+        setSpeechError('Could not start microphone recording. Check browser permissions.');
+        setIsRecording(false);
+      }
+    }
+  };
 
   const suggestedPrompts = [
     `Explain the CYP2D6 and CYP2C9 competitive inhibition mechanism in ${activePatient.name}'s current regimen.`,
@@ -38,6 +139,10 @@ export const GeminiChatAssistantView: React.FC<GeminiChatAssistantViewProps> = (
     const text = textToSend || inputPrompt;
     if (!text.trim() || isLoading) return;
 
+    if (isRecording) {
+      toggleRecording();
+    }
+
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: 'user',
@@ -48,6 +153,7 @@ export const GeminiChatAssistantView: React.FC<GeminiChatAssistantViewProps> = (
     const newHistory = [...messages, userMsg];
     setMessages(newHistory);
     setInputPrompt('');
+    setInterimTranscript('');
     setIsLoading(true);
 
     try {
@@ -122,16 +228,16 @@ export const GeminiChatAssistantView: React.FC<GeminiChatAssistantViewProps> = (
                   </div>
                 )}
 
-                <div className={`p-4 rounded-2xl max-w-xl space-y-1 ${
-                  m.sender === 'user' 
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-tr-none' 
-                    : 'bg-slate-800/90 border border-slate-700 text-slate-100 rounded-tl-none'
-                }`}>
+                <div className={`p-4 rounded-2xl ${m.sender === 'user' ? 'max-w-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-tr-none' : 'max-w-3xl bg-slate-800/90 border border-slate-700 text-slate-100 rounded-tl-none w-full'} space-y-1`}>
                   <div className="flex items-center justify-between text-[10px] text-slate-300 mb-1">
                     <span className="font-bold">{m.sender === 'user' ? 'You' : 'PharmaGuard Co-pilot'}</span>
                     <span className="opacity-70">{m.timestamp}</span>
                   </div>
-                  <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                  {m.sender === 'user' ? (
+                    <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                  ) : (
+                    <FormattedClinicalAnalysis content={m.content} showCopyButton={false} />
+                  )}
                 </div>
 
                 {m.sender === 'user' && (
@@ -152,19 +258,61 @@ export const GeminiChatAssistantView: React.FC<GeminiChatAssistantViewProps> = (
 
           {/* Chat Input Controls */}
           <div className="pt-3 border-t border-slate-800 space-y-2">
+            {/* Dictation Live Feedback / Status */}
+            {isRecording && (
+              <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/50 flex items-center justify-between text-xs font-mono text-rose-200 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                  </span>
+                  <span className="font-bold">Listening for dictation...</span>
+                  <span className="text-[10px] text-rose-300 hidden sm:inline">(Speak clinical observations clearly)</span>
+                </div>
+                <span className="text-[10px] bg-rose-900/80 px-2 py-0.5 rounded border border-rose-700">
+                  {interimTranscript ? `"${interimTranscript}"` : 'Awaiting speech...'}
+                </span>
+              </div>
+            )}
+
+            {speechError && (
+              <div className="p-2 rounded-xl bg-amber-950/60 border border-amber-800 text-amber-300 text-[11px] font-mono flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>{speechError}</span>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Ask Gemini about drug mechanisms, renal adjustments, or counterfactuals..."
+                placeholder={isRecording ? "Dictating into input... speak observation now" : "Ask Gemini about drug mechanisms or dictate patient observations..."}
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                className={`flex-1 bg-slate-800 border rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-colors ${
+                  isRecording ? 'border-rose-500/80 ring-2 ring-rose-500/20 bg-slate-850' : 'border-slate-700 focus:border-cyan-500'
+                }`}
               />
+
+              {/* Microphone Voice-to-Text Dictate Button */}
+              <button
+                onClick={toggleRecording}
+                type="button"
+                className={`p-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                  isRecording 
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse shadow-lg ring-2 ring-rose-400/50' 
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700'
+                }`}
+                title={isRecording ? "Stop voice dictation" : "Dictate patient observation via microphone"}
+              >
+                {isRecording ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-cyan-400" />}
+              </button>
+
               <button
                 onClick={() => handleSend()}
-                disabled={isLoading}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold p-2.5 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                disabled={isLoading || !inputPrompt.trim()}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold p-2.5 rounded-xl transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                title="Send message to Gemini"
               >
                 <Send className="w-4 h-4" />
               </button>
@@ -172,8 +320,43 @@ export const GeminiChatAssistantView: React.FC<GeminiChatAssistantViewProps> = (
           </div>
         </div>
 
-        {/* Right Col: Grounded Prompts */}
+        {/* Right Col: Grounded Prompts & Voice Dictation Assistant */}
         <div className="space-y-6">
+          {/* Voice Dictation Clinical Quick Prompts */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
+            <h2 className="text-sm font-bold text-white border-b border-slate-800 pb-2.5 flex items-center gap-2">
+              <Mic className="w-4 h-4 text-rose-400" />
+              <span>Voice Dictation Quick Templates</span>
+            </h2>
+            <p className="text-[11px] text-slate-400">
+              Click to dictate or populate sample clinician observations directly:
+            </p>
+
+            <div className="space-y-2 text-xs font-mono">
+              <button
+                onClick={() => {
+                  const sample = `Patient ${activePatient.name} reports severe nausea following morning Amiodarone administration. Current HR is ${activePatient.vitals.heartRate} bpm and eGFR is ${activePatient.kidneyFunction.egfr}. Assess potential drug toxicity.`;
+                  setInputPrompt(sample);
+                }}
+                className="w-full text-left p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-rose-500/50 text-slate-300 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Mic className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span className="truncate">Dictate: Amiodarone nausea & vital check</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const sample = `Clinician Note: Patient ${activePatient.name} displays elevated systolic BP (${activePatient.vitals.bpSystolic}/${activePatient.vitals.bpDiastolic} mmHg). Requesting renal-safe ACE/ARB dose titration recommendations.`;
+                  setInputPrompt(sample);
+                }}
+                className="w-full text-left p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-slate-300 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="truncate">Dictate: Hypertensive BP titration observation</span>
+              </button>
+            </div>
+          </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
             <h2 className="text-base font-bold text-white border-b border-slate-800 pb-3 flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-cyan-400" />
